@@ -13,7 +13,7 @@ function .watch {
   declare -A ignore
   fswatch -r $s -e node_modules | while read f; do
     hash="$(echo $f | md5)"
-    if [ ${ignore[$hash]} -eq 1 ] ; then
+    if [ -n "${ignore[$hash]}" ] ; then
       unset ignore[$hash]
       continue
     fi
