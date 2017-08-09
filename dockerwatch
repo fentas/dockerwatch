@@ -1,0 +1,62 @@
+#!/usr/bin/env bash
+
+trap "killall background" EXIT
+
+function .watch {
+  set -e
+
+  local -r i=$1
+  local -r s="$(echo $2 | jq -r '.Source')"
+  local -r d="$(echo $2 | jq -r '.Destination')"
+
+  echo "➤ $id:$s"
+  declare -A ignore
+  fswatch -r $s -e node_modules | while read f; do
+    hash="$(echo $f | md5)"
+    if [ ${ignore[$hash]} -eq 1 ] ; then
+      unset ignore[$hash]
+      continue
+    fi
+    ignore[$hash]=1
+
+    echo "✍ ${f/$s}"
+    docker exec $i touch "$d/${f/$s}"
+  done
+}
+
+function .start {
+  [ -n "${instances[$id]}" ] && return
+
+  local -r id=$1
+  for mount in $(docker inspect $id | jq -c '.[].Mounts[]'); do
+    .watch $id $mount &
+    instances[$id]=$!
+  done
+}
+function .stop {
+  sleep 5s
+  [ -z "${instances[$id]}" ] && return
+
+  local -r id=$1
+  kill "${instances[$id]}"
+  unset instances[$id]
+}
+
+declare -A instances
+
+docker events --filter 'type=container' --filter 'type=start' --format '{{.ID}}' |  while read id; do
+  .start $id
+done &
+
+docker events --filter 'type=container' --filter 'type=stop' --format '{{.ID}}' |  while read id; do
+  .stop $id &
+done &
+
+for id in $(docker ps -q); do
+  .start $id
+done
+
+while true; do sleep 1h; done
+
+# while instance; do
+# done < read docker events --filter 'type=container' --filter 'type=start' --format '{{.ID}}'
