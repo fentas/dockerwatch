@@ -12,6 +12,8 @@ function .watch {
   echo "➤ $id:$s"
   declare -A ignore
   fswatch -r $s -e node_modules | while read f; do
+    # On MacOS the touch events from this script result in
+    # change events on the host so those need to be ignored
     hash="$(echo $f | md5)"
     if [ -n "${ignore[$hash]}" ] ; then
       unset ignore[$hash]
